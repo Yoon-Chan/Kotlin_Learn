@@ -1,6 +1,10 @@
 package chap13.schap02
 
 import kotlinx.coroutines.*
+import java.io.File
+import java.lang.Exception
+import java.util.concurrent.ScheduledThreadPoolExecutor
+import java.util.concurrent.atomic.AtomicInteger
 
 suspend fun main() {
 /*  ex1() 실행 결과
@@ -13,7 +17,7 @@ suspend fun main() {
     ex2() 실행 결과
     2 children running
     This is task A
-    THis is task B
+    This is task B
 */
     ex2()
 
@@ -33,6 +37,14 @@ suspend fun main() {
     */
 
     ex5()
+
+/*  ex7() 실행 결과
+    실행할 때마다 순서가 다를 수 있다.
+
+    WorkerThread-3
+    WorkerThread-1
+    WorkerThread-2*/
+    ex7()
 }
 
 
@@ -64,6 +76,19 @@ fun c2(){
     *   잡의 cancel() 메서드를 호출하면 잡을 취소할 수 있다.
     *   이 메서드는 더 이상 필요 없는 계산을 중단시킬 수 있는 표준적인 방법을 제공한다.
     *   즉, 취소 가능한 코루틴이 스스로 취소가 요청됐는지 검사해서 적절히 반응해줘야 한다.
+    *
+    *
+    *   타임 아웃
+    *   작업이 완료되기를 무작정 기다릴 수 없을 경우 타임아웃을 설정할 때가 있다.
+    *   코루틴 라이브러리에서 withTimeout() 함수를 제공한다.
+    *   withTimeoutOrNull() 이란 함수도 있다. 이 함수는 예외를 던지는 대신 널 값을 돌려준다.
+    *
+    *
+    *   코루틴 디스패치하기
+    *
+    *   코루틴은 스레드와 무관하게 일시 중단 가능한 계산을 구현할 수 있게 해주지만, 코루틴을 실행하려면
+    *   여전히 스레드와 연관시켜야 한다. 코루틴 라이브러리에는 특정 코루틴을 실행할 때 사용할 스레드를 제어하는 작업을 담당하는 특별한 컴포넌트가 있다.
+    *   이 컴포넌트를 코루틴 디스패치(dispatcher)라고 부른다.
     * */
 
 }
@@ -156,5 +181,45 @@ suspend fun ex5(){
         delay(100)
         parentJob.cancel()
     }
+}
 
+//withTimeout() 함수 예제
+//파일을 50밀리초 안에 읽을 수 있다면 withTimeout()은 결과를 돌려주지만
+//초과하는 경우 예외를 던쳐 파일 읽는 코루틴이 취소된다.
+suspend fun ex6(){
+    runBlocking {
+        val asyncData = async { File("data.txt").readText() }
+
+        try{
+            val text = withTimeout(50) {asyncData.await()}
+            println("Data loaded : $text")
+
+        }catch (e : Exception){
+            println("Timeout exceeded")
+        }
+    }
+}
+
+//코루틴 디스패처 예제
+suspend fun ex7(){
+    val id = AtomicInteger(0)
+
+    val executor = ScheduledThreadPoolExecutor(5) {
+        runnable ->
+        Thread(
+            runnable,
+            "WorkerThread-${id.incrementAndGet()}"
+        ).also { it.isDaemon = true }
+    }
+
+    executor.asCoroutineDispatcher().use { dispatcher ->
+        runBlocking {
+            for(i in 1..3){
+                launch(dispatcher) {
+                    println(Thread.currentThread().name)
+                    delay(1000)
+                }
+            }
+        }
+    }
 }
